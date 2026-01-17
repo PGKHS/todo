@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"todo/pkg/api"
 )
 
 const defaultPort = 7540
 
-// Run starts the HTTP file server serving static assets from webDir.
 func Run(webDir string) error {
 	port := defaultPort
 	if envPort := os.Getenv("TODO_PORT"); envPort != "" {
@@ -22,8 +22,11 @@ func Run(webDir string) error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir(webDir)))
+	api.Init(mux)
+	http.Handle("/", http.FileServer(http.Dir(webDir)))
 
 	addr := ":" + strconv.Itoa(port)
 	log.Printf("starting server on http://localhost%s", addr)
 	return http.ListenAndServe(addr, mux)
+	return http.ListenAndServe(addr, nil)
 }
