@@ -26,6 +26,8 @@ func taskHandler(w http.ResponseWriter, r *http.Request) {
 		getTaskHandler(w, r)
 	case http.MethodPut:
 		updateTaskHandler(w, r)
+	case http.MethodDelete:
+		deleteTaskHandler(w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -100,6 +102,78 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.UpdateTask(&task); err != nil {
+		if errors.Is(err, db.ErrTaskNotFound) {
+			writeJSON(w, errorResponse{Error: "Задача не найдена"})
+			return
+		}
+		writeJSON(w, errorResponse{Error: err.Error()})
+		return
+	}
+
+	writeJSON(w, struct{}{})
+}
+
+func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.FormValue("id"))
+	if id == "" {
+		writeJSON(w, errorResponse{Error: "Не указан идентификатор"})
+		return
+	}
+
+	if err := db.DeleteTask(id); err != nil {
+		if errors.Is(err, db.ErrTaskNotFound) {
+			writeJSON(w, errorResponse{Error: "Задача не найдена"})
+			return
+		}
+		writeJSON(w, errorResponse{Error: err.Error()})
+		return
+	}
+
+	writeJSON(w, struct{}{})
+}
+
+func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := strings.TrimSpace(r.FormValue("id"))
+	if id == "" {
+		writeJSON(w, errorResponse{Error: "Не указан идентификатор"})
+		return
+	}
+
+	task, err := db.GetTask(id)
+	if err != nil {
+		if errors.Is(err, db.ErrTaskNotFound) {
+			writeJSON(w, errorResponse{Error: "Задача не найдена"})
+			return
+		}
+		writeJSON(w, errorResponse{Error: err.Error()})
+		return
+	}
+
+	if strings.TrimSpace(task.Repeat) == "" {
+		if err := db.DeleteTask(id); err != nil {
+			if errors.Is(err, db.ErrTaskNotFound) {
+				writeJSON(w, errorResponse{Error: "Задача не найдена"})
+				return
+			}
+			writeJSON(w, errorResponse{Error: err.Error()})
+			return
+		}
+		writeJSON(w, struct{}{})
+		return
+	}
+
+	next, err := NextDate(time.Now(), task.Date, task.Repeat)
+	if err != nil {
+		writeJSON(w, errorResponse{Error: err.Error()})
+		return
+	}
+
+	if err := db.UpdateDate(next, id); err != nil {
 		if errors.Is(err, db.ErrTaskNotFound) {
 			writeJSON(w, errorResponse{Error: "Задача не найдена"})
 			return
