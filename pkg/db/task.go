@@ -136,6 +136,51 @@ func UpdateTask(task *Task) error {
 	return nil
 }
 
+func UpdateDate(next string, id string) error {
+	taskID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	query := `UPDATE scheduler SET date = ? WHERE id = ?`
+	res, err := DB.Exec(query, next, taskID)
+	if err != nil {
+		return err
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrTaskNotFound
+	}
+
+	return nil
+}
+
+func DeleteTask(id string) error {
+	taskID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	res, err := DB.Exec(`DELETE FROM scheduler WHERE id = ?`, taskID)
+	if err != nil {
+		return err
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrTaskNotFound
+	}
+
+	return nil
+}
+
 func parseSearchDate(value string) (string, bool) {
 	parsed, err := time.ParseInLocation(searchDateLayout, value, time.Local)
 	if err != nil {
