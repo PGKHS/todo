@@ -1,5 +1,17 @@
 package db
 
+import (
+	"database/sql"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const (
+	dateLayout       = "20060102"
+	searchDateLayout = "02.01.2006"
+)
+
 type Task struct {
 	ID      string `json:"id"`
 	Date    string `json:"date"`
@@ -17,3 +29,67 @@ func AddTask(task *Task) (int64, error) {
 	}
 	return id, err
 }
+
+func Tasks(limit int, search string) ([]*Task, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	var (
+		rows *sql.Rows
+		err  error
+	)
+
+	search = strings.TrimSpace(search)
+	if search == "" {
+		rows, err = DB.Query(
+			`SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date LIMIT ?`,
+			limit,
+		)
+	} else if date, ok := parseSearchDate(search); ok {
+		rows, err = DB.Query(
+			`SELECT id, date, title, comment, repeat FROM scheduler WHERE date = ? ORDER BY date LIMIT ?`,
+			date,
+			limit,
+		)
+	} else {
+		like := "%" + search + "%"
+		rows, err = DB.Query(
+			`SELECT id, date, title, comment, repeat FROM scheduler WHERE title LIKE ? OR comment LIKE ? ORDER BY date LIMIT ?`,
+			like,
+			like,
+			limit,
+		)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tasks := make([]*Task, 0)
+	for rows.Next() {
+		var (
+			task Task
+			id   int64
+		)
+		if err := rows.Scan(&id, &task.Date, &task.Title, &task.Comment, &task.Repeat); err != nil {
+			return nil, err
+		}
+		task.ID = strconv.FormatInt(id, 10)
+		tasks = append(tasks, &task)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return tasks, nil
+}
+
+func parseSearchDate(value string) (string, bool) {
+	parsed, err := time.ParseInLocation(searchDateLayout, value, time.Local)
+	if err != nil {
+		return "", false
+	}
+	return parsed.Format(dateLayout), true
+}
+
