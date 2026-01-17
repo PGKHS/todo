@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,8 @@ type Task struct {
 	Comment string `json:"comment"`
 	Repeat  string `json:"repeat"`
 }
+
+var ErrTaskNotFound = errors.New("task not found")
 
 func AddTask(task *Task) (int64, error) {
 	var id int64
@@ -85,6 +88,54 @@ func Tasks(limit int, search string) ([]*Task, error) {
 	return tasks, nil
 }
 
+func GetTask(id string) (*Task, error) {
+	taskID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		task Task
+		dbID int64
+	)
+	err = DB.QueryRow(
+		`SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?`,
+		taskID,
+	).Scan(&dbID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTaskNotFound
+		}
+		return nil, err
+	}
+	task.ID = strconv.FormatInt(dbID, 10)
+
+	return &task, nil
+}
+
+func UpdateTask(task *Task) error {
+	taskID, err := strconv.ParseInt(task.ID, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	query := `UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`
+	res, err := DB.Exec(query, task.Date, task.Title, task.Comment, task.Repeat, taskID)
+	if err != nil {
+		return err
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrTaskNotFound
+	}
+
+	return nil
+}
+
 func parseSearchDate(value string) (string, bool) {
 	parsed, err := time.ParseInLocation(searchDateLayout, value, time.Local)
 	if err != nil {
@@ -92,4 +143,3 @@ func parseSearchDate(value string) (string, bool) {
 	}
 	return parsed.Format(dateLayout), true
 }
-
