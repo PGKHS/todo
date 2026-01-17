@@ -7,4 +7,5 @@ func Init(mux *http.ServeMux) {
 		return
 	}
 	mux.HandleFunc("/api/nextdate", nextDateHandler)
+	mux.HandleFunc("/api/task", taskHandler)
 }
