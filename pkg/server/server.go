@@ -24,6 +24,6 @@ func Run(webDir string) error {
 	mux.Handle("/", http.FileServer(http.Dir(webDir)))
 
 	addr := ":" + strconv.Itoa(port)
-	log.Printf("starting server on %s", addr)
+	log.Printf("starting server on http://localhost%s", addr)
 	return http.ListenAndServe(addr, mux)
 }
