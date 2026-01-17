@@ -2,11 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-
 	"todo/pkg/db"
 )
 
@@ -22,6 +22,12 @@ func taskHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		addTaskHandler(w, r)
+	case http.MethodGet:
+		getTaskHandler(w, r)
+	case http.MethodPut:
+		updateTaskHandler(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -49,6 +55,60 @@ func addTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, idResponse{ID: strconv.FormatInt(id, 10)})
+}
+
+func getTaskHandler(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.FormValue("id"))
+	if id == "" {
+		writeJSON(w, errorResponse{Error: "Не указан идентификатор"})
+		return
+	}
+
+	task, err := db.GetTask(id)
+	if err != nil {
+		if errors.Is(err, db.ErrTaskNotFound) {
+			writeJSON(w, errorResponse{Error: "Задача не найдена"})
+			return
+		}
+		writeJSON(w, errorResponse{Error: err.Error()})
+		return
+	}
+
+	writeJSON(w, task)
+}
+
+func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
+	var task db.Task
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		writeJSON(w, errorResponse{Error: err.Error()})
+		return
+	}
+
+	if strings.TrimSpace(task.ID) == "" {
+		writeJSON(w, errorResponse{Error: "Не указан идентификатор"})
+		return
+	}
+
+	if strings.TrimSpace(task.Title) == "" {
+		writeJSON(w, errorResponse{Error: "missing title"})
+		return
+	}
+
+	if err := checkDate(&task); err != nil {
+		writeJSON(w, errorResponse{Error: err.Error()})
+		return
+	}
+
+	if err := db.UpdateTask(&task); err != nil {
+		if errors.Is(err, db.ErrTaskNotFound) {
+			writeJSON(w, errorResponse{Error: "Задача не найдена"})
+			return
+		}
+		writeJSON(w, errorResponse{Error: err.Error()})
+		return
+	}
+
+	writeJSON(w, struct{}{})
 }
 
 func checkDate(task *db.Task) error {
